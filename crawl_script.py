@@ -6,6 +6,7 @@ from urllib.parse import urljoin
 from openpyxl import Workbook
 
 BASE_URL = "https://newsmaker.md/ro"
+RESULTS_DIR = "crawled_results"  # Main directory for all results
 
 def get_latest_post_links(limit=5):
     resp = requests.get(BASE_URL)
@@ -43,8 +44,8 @@ def scrape_post(url, index):
             paragraphs.append(text)
     body_text = "\n\n".join(paragraphs)
 
-    # Folder for post
-    folder = f"11LM{index}"
+    # Folder for post inside crawled_results
+    folder = os.path.join(RESULTS_DIR, f"11LM{index}")
     os.makedirs(folder, exist_ok=True)
 
     # Save text
@@ -86,6 +87,9 @@ def scrape_post(url, index):
     }
 
 if __name__ == "__main__":
+    # Create main results directory if not exists
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+
     links = get_latest_post_links(5)
 
     # Create Excel workbook
@@ -98,5 +102,8 @@ if __name__ == "__main__":
         data = scrape_post(link, i)
         ws.append([data["ID"], data["Title"], data["Date"], data["URL"], data["Body"], data["ImagePath"]])
 
-    wb.save("posts.xlsx")
-    print("Excel file 'posts.xlsx' created.")
+    # Save Excel file inside crawled_results folder
+    excel_path = os.path.join(RESULTS_DIR, "posts.xlsx")
+    wb.save(excel_path)
+
+    print(f"Excel file '{excel_path}' created.")
