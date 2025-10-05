@@ -363,3 +363,4 @@ def _write_excel_from_rows(rows: list[dict], excel_path: Path):
 
     wb.save(excel_path)
 
+## Separate the logic of the conversion to the excel from the crawling 
