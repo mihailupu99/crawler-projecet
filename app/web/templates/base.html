@@ -1,0 +1,74 @@
+<!-- app/web/templates/base.html -->
+<!DOCTYPE html>
+<html lang="ro">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>{{ title or "Newsmaker Scraper" }}</title>
+
+    <!-- Tailwind v4 (browser build) -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+    <style>
+      /* htmx loading indicator helper */
+      .htmx-indicator {
+        display: none;
+      }
+      .htmx-request .htmx-indicator {
+        display: inline-block;
+      }
+      .htmx-request.htmx-indicator {
+        display: inline-block;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50 text-gray-900">
+    <header class="sticky top-0 z-10 bg-white/80 backdrop-blur border-b">
+      <div
+        class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between"
+      >
+        <div class="flex items-center gap-3">
+          <span
+            class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white font-bold"
+            >NM</span
+          >
+          <h1 class="text-lg font-semibold">Newsmaker Scraper</h1>
+        </div>
+        <nav class="flex items-center gap-3">
+          <a
+            href="/export.xlsx"
+            class="px-3 py-2 rounded-lg border hover:bg-gray-100"
+            >Export Excel</a
+          >
+
+          <!-- Scrape button updates #posts via HTMX without refresh -->
+          <button
+            class="px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+            hx-post="/scrape-fragment"
+            hx-vals='{"limit": 6}'
+            hx-target="#posts"
+            hx-swap="innerHTML"
+            hx-indicator="#scrapeSpinner"
+            aria-label="Scrape latest posts"
+          >
+            Scrape latest 10
+          </button>
+
+          <span id="scrapeSpinner" class="htmx-indicator text-sm text-gray-500"
+            >Loading…</span
+          >
+        </nav>
+      </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 py-6">
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="max-w-6xl mx-auto px-4 py-8 text-sm text-gray-500">
+      Built with FastAPI · HTMX · Tailwind
+    </footer>
+  </body>
+</html>

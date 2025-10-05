@@ -1,0 +1,64 @@
+<!-- app/web/templates/partials/posts_fragment.html -->
+{% if posts and posts|length > 0 %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+  {% for p in posts %}
+  <article
+    class="bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col"
+  >
+    {% set img = p.local_image_web or p.image_url %} {% if img %}
+    <img
+      src="{{ img }}"
+      alt="{{ p.title }}"
+      class="aspect-[16/9] object-cover"
+    />
+    {% else %}
+    <div
+      class="aspect-[16/9] bg-gray-100 flex items-center justify-center text-gray-400"
+    >
+      no image
+    </div>
+    {% endif %}
+
+    <div class="p-4 flex-1 flex flex-col">
+      <h2 class="font-semibold text-base leading-snug line-clamp-2 mb-2">
+        {{ p.title }}
+      </h2>
+      <div class="text-sm text-gray-500 mb-3">
+        <span>{{ p.date }}</span>
+        {% if p.paragraphs_count %} ·
+        <span>{{ p.paragraphs_count }} par.</span>{% endif %}
+      </div>
+
+      <div class="mt-auto">
+        <a
+          href="{{ p.url }}"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-medium"
+        >
+          Deschide articolul
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M13 7h4m0 0v4m0-4L10 14m-7 4h8a2 2 0 002-2v-8"
+            />
+          </svg>
+        </a>
+      </div>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-gray-500">
+  Nu există rezultate încă. Apasă <em>Scrape latest</em> pentru a începe.
+</div>
+{% endif %}

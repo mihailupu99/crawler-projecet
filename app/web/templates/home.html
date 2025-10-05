@@ -1,0 +1,14 @@
+<!-- app/web/templates/home.html -->
+{% extends "base.html" %} {% block content %}
+<!-- This container pulls the list fragment on page load -->
+<div
+  id="posts"
+  hx-get="/partials/posts"
+  hx-trigger="load"
+  hx-target="#posts"
+  hx-swap="innerHTML"
+  class="min-h-[200px]"
+>
+  <div class="text-gray-500">Loading posts…</div>
+</div>
+{% endblock %}
