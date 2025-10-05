@@ -73,7 +73,7 @@ def posts_partial(request: Request):
 
 # HTMX scrape endpoint: scrape, then return updated posts list fragment
 @app.post("/scrape-fragment", response_class=HTMLResponse)
-def scrape_fragment(request: Request, limit: int = 5):
+def scrape_fragment(request: Request, limit: int = 100):  # was 5
     scrape_latest_wp_to_files(SITE_BASE, limit=limit)
     posts = summarize_existing_results()
     return templates.TemplateResponse(
@@ -83,7 +83,7 @@ def scrape_fragment(request: Request, limit: int = 5):
 
 # (Optional) Keep the JSON API if you still want it
 @app.post("/scrape")
-def scrape(limit: int = 5):
+def scrape(limit: int = 100):  # was 5
     rows, excel_path = scrape_latest_wp_to_files(SITE_BASE, limit=limit)
     return JSONResponse({"inserted": len(rows), "excel": excel_path})
 

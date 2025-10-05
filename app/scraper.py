@@ -11,11 +11,21 @@ import requests
 from requests.exceptions import RequestException
 from openpyxl import Workbook
 from bs4 import BeautifulSoup
+import io
+from openpyxl.drawing.image import Image as XLImage
+from PIL import Image as PILImage  # pip install pillow
+
 
 RESULTS_DIR = "crawled_results"
 DEFAULT_UA = "MihaiNewsmakerScraper/2.0 (+contact: you@example.com)"
 ID_PREFIX = "11LM"
 ID_PAD = 3  # 000, 001, ...
+
+# ADD:
+# Thumbnail sizing for images placed into Excel
+IMAGE_MAX_WIDTH_PX = 200
+IMAGE_MAX_HEIGHT_PX = 150
+IMAGE_COLUMN_LETTER = "F"  # where the image will be placed
 
 # A slightly richer set of headers that helps some CDNs accept non-browser requests
 RICH_HEADERS = {
@@ -203,29 +213,28 @@ def _save_post_files(row: dict, id_str: str) -> dict:
     # image (with better resilience + visibility into failures)
     img_path = None
     img_error = None
+    img_bytes = None  # ADD
     if row.get("ImageURL"):
         try:
-            # some origins require a referer and broader Accept header
             headers = {**RICH_HEADERS, "Referer": row.get("URL") or ""}
             ir = backoff_retry_get(row["ImageURL"], timeout=20.0, headers=headers)
+            img_bytes = ir.content  # ADD
 
-            # Derive extension from Content-Type when URL doesn't have one / has CDN params
             ct = ir.headers.get("Content-Type", "").split(";")[0].strip().lower()
             guessed_ext = mimetypes.guess_extension(ct) if ct else None
             if not guessed_ext:
-                # fallback to URL path extension (minus query), then .jpg
                 guessed_ext = os.path.splitext(row["ImageURL"])[-1].split("?")[0] or ".jpg"
             if guessed_ext == ".jpe":
                 guessed_ext = ".jpg"
 
             img_path = folder / f"{id_str}{guessed_ext}"
-            img_path.write_bytes(ir.content)
+            img_path.write_bytes(img_bytes)  # EDIT: use img_bytes
 
         except Exception as e:
             img_error = f"{type(e).__name__}: {e}"
             img_path = None
+            img_bytes = None  # ADD
 
-    # metadata JSON (include image diagnostics)
     metadata = {
         "url": row["URL"],
         "title": row["Title"],
@@ -245,8 +254,47 @@ def _save_post_files(row: dict, id_str: str) -> dict:
         "Date": row["Date"],
         "URL": row["URL"],
         "Body": row["Body"],
+        # EDIT: keep path if you want, but we’ll embed the image itself in Excel
         "ImagePath": str(img_path) if img_path else None,
+        # ADD: raw bytes for embedding in Excel
+        "ImageBytes": img_bytes,
     }
+
+def _embed_image(ws, row_index: int, img_bytes: bytes | None, thumb_dir: Path, name_hint: str):
+    """
+    Save a thumbnail PNG to disk and embed by file path (most reliable for openpyxl).
+    name_hint should be a unique-ish string (e.g., the row ID) to avoid filename clashes.
+    """
+    if not img_bytes:
+        return
+    try:
+        thumb_dir.mkdir(parents=True, exist_ok=True)
+
+        # Load & thumbnail
+        pil = PILImage.open(io.BytesIO(img_bytes)).convert("RGB")
+        pil.thumbnail((IMAGE_MAX_WIDTH_PX, IMAGE_MAX_HEIGHT_PX))
+
+        # Save to disk as PNG
+        thumb_path = thumb_dir / f"{name_hint}.png"
+        pil.save(thumb_path, format="PNG")
+
+        # Embed by PATH (most robust across openpyxl versions)
+        xl_img = XLImage(str(thumb_path))
+
+        cell_addr = f"{IMAGE_COLUMN_LETTER}{row_index}"
+        xl_img.anchor = cell_addr
+        ws.add_image(xl_img)
+
+        # Adjust row height (Excel uses ~0.75 pt per px)
+        ws.row_dimensions[row_index].height = max(
+            ws.row_dimensions[row_index].height or 0,
+            pil.size[1] * 0.75
+        )
+    except Exception:
+        # If image is corrupt/unsupported, just skip it
+        return
+
+
 
 
 def scrape_latest_wp_to_files(site_base: str, limit: int = 5):
@@ -278,12 +326,40 @@ def scrape_latest_wp_to_files(site_base: str, limit: int = 5):
     _write_excel_from_rows(saved_rows, excel_path)
     return saved_rows, str(excel_path)
 
-
 def _write_excel_from_rows(rows: list[dict], excel_path: Path):
     wb = Workbook()
     ws = wb.active
     ws.title = "Posts"
-    ws.append(["ID", "Title", "Date", "URL", "Body", "ImagePath"])
+
+    ws.append(["ID", "Title", "Date", "URL", "Body", "Image"])
+
+    # Readability
+    ws.column_dimensions["A"].width = 10
+    ws.column_dimensions["B"].width = 60
+    ws.column_dimensions["C"].width = 20
+    ws.column_dimensions["D"].width = 50
+    ws.column_dimensions["E"].width = 120
+    ws.column_dimensions[IMAGE_COLUMN_LETTER].width = 28
+
+    # NEW: thumbnail directory beside the workbook
+    thumb_dir = Path(RESULTS_DIR) / "_thumbs"
+
     for r in rows:
-        ws.append([r["ID"], r["Title"], r["Date"], r["URL"], r["Body"], r["ImagePath"]])
+        # Defensive: Excel cell limit ~32767 chars
+        body = r.get("Body") or ""
+        if len(body) > 32000:
+            body = body[:32000] + "…"
+
+        ws.append([r["ID"], r["Title"], r["Date"], r["URL"], body, ""])
+        current_row = ws.max_row
+
+        img_bytes = r.get("ImageBytes")
+        if not img_bytes and r.get("ImagePath") and os.path.isfile(r["ImagePath"]):
+            with open(r["ImagePath"], "rb") as f:
+                img_bytes = f.read()
+
+        # Pass a stable name for the thumbnail file (row ID)
+        _embed_image(ws, current_row, img_bytes, thumb_dir, r.get("ID", f"row{current_row}"))
+
     wb.save(excel_path)
+
