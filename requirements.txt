@@ -1,3 +1,7 @@
-requests
+fastapi
+uvicorn[standard]
 beautifulsoup4
+requests
 openpyxl
+python-multipart
+jinja2
