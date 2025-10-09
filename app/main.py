@@ -10,11 +10,16 @@ import json, os
 
 from app.scraper import scrape_latest_wp_to_files, RESULTS_DIR
 
-from fastapi import Depends
+from fastapi import Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from app.db.session import get_db
 from app.db.models import Article, Asset, TextRow, AssetKind, TextKind
+
+from pathlib import Path
+
+from fastapi import HTTPException
+
 
 
 SITE_BASE = "https://newsmaker.md/ro"
@@ -64,6 +69,21 @@ def summarize_existing_results(results_dir: str = "crawled_results"):
             "paragraphs_count": m.get("paragraphs_count", 0),
         })
     return out
+
+def _read_body_text(article_id: str) -> str:
+    p = Path(RESULTS_DIR) / article_id / f"{article_id}.txt"
+    try:
+        return p.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+
+
+def _find_article_summary(article_id: str):
+    posts = summarize_existing_results()
+    for p in posts:
+        if p.get("id") == article_id:
+            return p
+    return None
 
 app = FastAPI()
 templates = Jinja2Templates(directory="app/web/templates")
@@ -134,3 +154,73 @@ def list_articles(db: Session = Depends(get_db)):
             "texts": txt_count,
         })
     return results
+
+# Full compare panel (original vs generated)
+@app.get("/partials/article_compare", response_class=HTMLResponse)
+def article_compare(request: Request, article_id: str = Query(...)):
+    meta = _find_article_summary(article_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    original_text = _read_body_text(article_id)
+    # placeholders for future generated artifacts
+    generated_text = None
+    generated_image_web = None
+    gen_text_model = None
+    gen_img_model = None
+    gen_status = "No generations yet"
+
+    ctx = {
+        "request": request,
+        "article": {
+            **meta,
+            "original_text": original_text,
+            "generated_text": generated_text,
+            "generated_image_web": generated_image_web,
+            "gen_text_model": gen_text_model,
+            "gen_img_model": gen_img_model,
+            "gen_status": gen_status,
+        },
+    }
+    return templates.TemplateResponse("partials/article_compare.html", ctx)
+
+# Smaller panel that just shows the right-hand (Generated) side; useful for polling later
+@app.get("/partials/generated_panel", response_class=HTMLResponse)
+def generated_panel(request: Request, article_id: str = Query(...)):
+    meta = _find_article_summary(article_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Article not found")
+    # same placeholders for now
+    ctx = {
+        "request": request,
+        "article": {
+            **meta,
+            "generated_text": None,
+            "generated_image_web": None,
+            "gen_text_model": None,
+            "gen_img_model": None,
+            "gen_status": "No generations yet",
+        },
+    }
+    return templates.TemplateResponse("partials/generated_panel.html", ctx)
+
+@app.get("/compare", response_class=HTMLResponse)
+def compare_page(request: Request):
+    # Shell page; list loads via HTMX
+    return templates.TemplateResponse("compare.html", {"request": request, "title": "Compare"})
+
+@app.get("/partials/compare_rows", response_class=HTMLResponse)
+def compare_rows(request: Request, limit: int = Query(12, ge=1, le=200)):
+    posts = summarize_existing_results()[:limit]
+    # enrich with original text + placeholders for generated
+    for a in posts:
+        a["original_text"] = _read_body_text(a["id"])
+        a["generated_text"] = None
+        a["generated_image_web"] = None
+        a["gen_text_model"] = None
+        a["gen_img_model"] = None
+        a["gen_status"] = "No generations yet."
+    return templates.TemplateResponse(
+        "partials/compare_list.html",
+        {"request": request, "posts": posts}
+    )

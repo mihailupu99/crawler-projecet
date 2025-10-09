@@ -1,0 +1,56 @@
+<!-- app/web/templates/partials/generated_panel.html -->
+<div class="flex items-center justify-between">
+  <h3 class="text-sm font-semibold text-gray-700">Generated</h3>
+  <!-- You will wire these to your enqueue endpoints later -->
+  <div class="flex gap-2">
+    <button
+      class="px-2 py-1 rounded-md border text-xs text-gray-400 cursor-not-allowed"
+      disabled
+    >
+      Image → Text
+    </button>
+    <button
+      class="px-2 py-1 rounded-md border text-xs text-gray-400 cursor-not-allowed"
+      disabled
+    >
+      Text → Image
+    </button>
+  </div>
+</div>
+
+{% if article.generated_text %}
+<div>
+  <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">
+    Generated Text
+  </div>
+  <pre
+    class="text-sm whitespace-pre-wrap bg-gray-50 rounded-lg p-3 max-h-56 overflow-auto"
+  >
+{{ article.generated_text }}</pre
+  >
+  <div class="text-xs text-gray-500 mt-1">
+    Model: {{ article.gen_text_model }} · Updated: {{ article.gen_text_time }}
+  </div>
+</div>
+{% else %}
+<div class="text-sm text-gray-500">No generated text yet.</div>
+{% endif %} {% if article.generated_image_web %}
+<div class="mt-3">
+  <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">
+    Generated Image
+  </div>
+  <img
+    src="{{ article.generated_image_web }}"
+    alt=""
+    class="w-full rounded-lg object-contain max-h-80"
+  />
+  <div class="text-xs text-gray-500 mt-1">
+    Model: {{ article.gen_img_model }}
+  </div>
+</div>
+{% else %}
+<div class="text-sm text-gray-500">No generated image yet.</div>
+{% endif %} {% if not article.generated_text and not article.generated_image_web
+%}
+<div class="text-xs text-gray-400">{{ article.gen_status }}</div>
+{% endif %}

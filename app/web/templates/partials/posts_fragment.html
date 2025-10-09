@@ -2,9 +2,7 @@
 {% if posts and posts|length > 0 %}
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
   {% for p in posts %}
-  <article
-    class="bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col"
-  >
+  <article class="bg-white rounded-2xl border shadow-sm overflow-hidden">
     {% set img = p.local_image_web or p.image_url %} {% if img %}
     <img
       src="{{ img }}"
@@ -19,21 +17,21 @@
     </div>
     {% endif %}
 
-    <div class="p-4 flex-1 flex flex-col">
-      <h2 class="font-semibold text-base leading-snug line-clamp-2 mb-2">
+    <div class="p-4 space-y-3">
+      <h2 class="font-semibold text-base leading-snug line-clamp-2">
         {{ p.title }}
       </h2>
-      <div class="text-sm text-gray-500 mb-3">
+      <div class="text-sm text-gray-500">
         <span>{{ p.date }}</span>
         {% if p.paragraphs_count %} ·
         <span>{{ p.paragraphs_count }} par.</span>{% endif %}
       </div>
 
-      <div class="mt-auto">
+      <div class="flex items-center gap-3">
         <a
           href="{{ p.url }}"
           target="_blank"
-          rel="noopener noreferrer"
+          rel="noopener"
           class="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-medium"
         >
           Deschide articolul
@@ -52,8 +50,21 @@
             />
           </svg>
         </a>
+
+        <!-- Compare expander -->
+        <button
+          class="ml-auto px-3 py-2 rounded-lg border hover:bg-gray-50"
+          hx-get="/partials/article_compare?article_id={{ p.id }}"
+          hx-target="#compare-{{ p.id }}"
+          hx-swap="innerHTML"
+        >
+          Compare
+        </button>
       </div>
     </div>
+
+    <!-- Lazy-loaded compare panel lives here -->
+    <div id="compare-{{ p.id }}"></div>
   </article>
   {% endfor %}
 </div>

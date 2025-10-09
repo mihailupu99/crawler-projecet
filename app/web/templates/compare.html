@@ -1,0 +1,32 @@
+<!-- app/web/templates/compare.html -->
+{% extends "base.html" %} {% block content %}
+<h2 class="text-xl font-semibold mb-4">Compare (Original vs Generated)</h2>
+
+<!-- Controls (optional) -->
+<div class="mb-4 flex gap-2 items-center">
+  <label class="text-sm text-gray-600">Items:</label>
+  <select
+    class="border rounded-lg px-2 py-1"
+    hx-get="/partials/compare_rows"
+    hx-target="#compare-list"
+    hx-swap="innerHTML"
+    name="limit"
+  >
+    <option value="6">6</option>
+    <option value="12" selected>12</option>
+    <option value="24">24</option>
+  </select>
+</div>
+
+<!-- Compare list loads via HTMX -->
+<div
+  id="compare-list"
+  class="space-y-6"
+  hx-get="/partials/compare_rows?limit=12"
+  hx-trigger="load"
+  hx-target="#compare-list"
+  hx-swap="innerHTML"
+>
+  <div class="text-gray-500">Loading comparisons…</div>
+</div>
+{% endblock %}
