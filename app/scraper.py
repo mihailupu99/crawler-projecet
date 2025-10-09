@@ -300,20 +300,15 @@ def _embed_image(ws, row_index: int, img_bytes: bytes | None, thumb_dir: Path, n
 def scrape_latest_wp_to_files(site_base: str, limit: int = 5):
     Path(RESULTS_DIR).mkdir(parents=True, exist_ok=True)
 
-    # fetch latest from WP
     wp_items = fetch_wp_posts(site_base, limit=limit)
     normalized = [_normalize_post(it) for it in wp_items]
 
-    # filter out URLs we already saved
     seen = _existing_urls()
     fresh = [r for r in normalized if r["URL"] and r["URL"] not in seen]
     if not fresh:
-        # still rebuild Excel from current run to keep compatibility
-        excel_path = Path(RESULTS_DIR) / "posts.xlsx"
-        _write_excel_from_rows([], excel_path)
-        return [], str(excel_path)
+        # Do NOT write Excel here anymore.
+        return []
 
-    # allocate sequential 11LM IDs
     n = _next_index()
     saved_rows = []
     for row in fresh:
@@ -321,10 +316,69 @@ def scrape_latest_wp_to_files(site_base: str, limit: int = 5):
         saved_rows.append(_save_post_files(row, id_str))
         n += 1
 
-    # write excel for JUST the newly saved rows (same behavior you had)
-    excel_path = Path(RESULTS_DIR) / "posts.xlsx"
-    _write_excel_from_rows(saved_rows, excel_path)
-    return saved_rows, str(excel_path)
+    # No Excel writing here — exporting is a separate action now.
+    return saved_rows
+
+def _rows_from_existing(results_dir: str = RESULTS_DIR) -> list[dict]:
+    """
+    Recreate the same row dicts expected by _write_excel_from_rows(...)
+    by reading the saved metadata/body/image files from disk.
+    """
+    rows = []
+    base = Path(results_dir)
+    if not base.is_dir():
+        return rows
+
+    for folder in sorted(base.iterdir()):
+        if not folder.is_dir():
+            continue
+        id_str = folder.name
+        meta_path = folder / f"{id_str}.json"
+        body_path = folder / f"{id_str}.txt"
+
+        if not meta_path.exists():
+            continue
+
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except Exception:
+            meta = {}
+
+        body = ""
+        if body_path.exists():
+            try:
+                body = body_path.read_text(encoding="utf-8")
+            except Exception:
+                body = ""
+
+        # find a saved image file if present
+        img_path = None
+        for f in folder.iterdir():
+            if f.stem == id_str and f.suffix.lower() in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"}:
+                img_path = str(f)
+                break
+
+        rows.append({
+            "ID": id_str,
+            "Title": meta.get("title", ""),
+            "Date": meta.get("date", ""),
+            "URL": meta.get("url", ""),
+            "Body": body,
+            "ImagePath": img_path,
+            "ImageBytes": None,  # will be reloaded in _write_excel_from_rows if needed
+        })
+    return rows
+
+
+def export_existing_to_excel(excel_path: Path | str = Path(RESULTS_DIR) / "posts.xlsx",
+                             results_dir: str = RESULTS_DIR) -> str:
+    """
+    Build (or rebuild) the Excel workbook from whatever is already on disk.
+    """
+    rows = _rows_from_existing(results_dir)
+    _write_excel_from_rows(rows, Path(excel_path))
+    return str(excel_path)
+
 
 def _write_excel_from_rows(rows: list[dict], excel_path: Path):
     wb = Workbook()
