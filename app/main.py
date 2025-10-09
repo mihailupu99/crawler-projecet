@@ -19,6 +19,7 @@ from app.db.models import Article, Asset, TextRow, AssetKind, TextKind
 from pathlib import Path
 
 from fastapi import HTTPException
+from app.generation import generate_t2i_for_article
 
 
 
@@ -72,11 +73,12 @@ def summarize_existing_results(results_dir: str = "crawled_results"):
 
 def _read_body_text(article_id: str) -> str:
     p = Path(RESULTS_DIR) / article_id / f"{article_id}.txt"
+    if not p.exists():
+        return ""
     try:
         return p.read_text(encoding="utf-8")
     except Exception:
         return ""
-
 
 def _find_article_summary(article_id: str):
     posts = summarize_existing_results()
@@ -224,3 +226,21 @@ def compare_rows(request: Request, limit: int = Query(12, ge=1, le=200)):
         "partials/compare_list.html",
         {"request": request, "posts": posts}
     )
+
+
+@app.post("/api/generate/t2i/first")
+def generate_first_t2i():
+    posts = summarize_existing_results()
+    if not posts:
+        raise HTTPException(status_code=404, detail="No articles available.")
+
+    first = posts[0]   # your “first post”
+    article_id = first["id"]
+    title = first.get("title") or ""
+    body = _read_body_text(article_id)
+
+    if not body:
+        raise HTTPException(status_code=400, detail="First article has no body text.")
+
+    result = generate_t2i_for_article(article_id, title, body)
+    return {"ok": True, **result}
