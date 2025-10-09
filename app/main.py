@@ -10,6 +10,13 @@ import json, os
 
 from app.scraper import scrape_latest_wp_to_files, RESULTS_DIR
 
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from sqlalchemy import select, func
+from app.db.session import get_db
+from app.db.models import Article, Asset, TextRow, AssetKind, TextKind
+
+
 SITE_BASE = "https://newsmaker.md/ro"
 
 # ⬇️ richer summary for templates (includes local image path + metadata)
@@ -93,3 +100,37 @@ def export_xlsx():
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename="posts.xlsx"
     )
+
+@app.get("/api/articles")
+def list_articles(db: Session = Depends(get_db)):
+    # Fetch articles
+    articles = db.execute(
+        select(Article).order_by(Article.created_at.desc())
+    ).scalars().all()
+
+    results = []
+    for a in articles:
+        img_count = db.execute(
+            select(func.count(Asset.id)).where(
+                Asset.article_id == a.id,
+                Asset.kind == AssetKind.original_image
+            )
+        ).scalar_one()
+
+        txt_count = db.execute(
+            select(func.count(TextRow.id)).where(
+                TextRow.article_id == a.id,
+                TextRow.kind == TextKind.original_text
+            )
+        ).scalar_one()
+
+        results.append({
+            "id": a.id,
+            "title": a.title,
+            "url": a.url,
+            "paragraphs": a.paragraphs_count,
+            "published_at": a.published_at,  
+            "images": img_count,
+            "texts": txt_count,
+        })
+    return results

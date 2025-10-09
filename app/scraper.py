@@ -15,6 +15,14 @@ import io
 from openpyxl.drawing.image import Image as XLImage
 from PIL import Image as PILImage  # pip install pillow
 
+# NEW: DB imports
+from datetime import datetime
+import hashlib
+from app.db.session import SessionLocal
+from app.db.crud import upsert_article, create_or_get_text, create_or_get_asset
+from app.db.models import TextKind, AssetKind
+
+
 
 RESULTS_DIR = "crawled_results"
 DEFAULT_UA = "MihaiNewsmakerScraper/2.0 (+contact: you@example.com)"
@@ -35,6 +43,11 @@ RICH_HEADERS = {
 }
 
 # ---------- helpers for ID & de-dup ----------
+
+def _sha256_bytes(b: bytes) -> str:
+    h = hashlib.sha256()
+    h.update(b)
+    return h.hexdigest()
 
 
 def _existing_urls(results_dir: str = RESULTS_DIR) -> set[str]:
@@ -247,6 +260,57 @@ def _save_post_files(row: dict, id_str: str) -> dict:
     (folder / f"{id_str}.json").write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+        # --- DB upsert: article + original text + original image ---
+    published_at = None
+    try:
+        if row["Date"]:
+            # WP uses ISO8601; accept both 'Z' and offset formats
+            published_at = datetime.fromisoformat(row["Date"].replace("Z", "+00:00"))
+    except Exception:
+        published_at = None
+
+    preview = (row["Body"][:512] + "…") if row["Body"] and len(row["Body"]) > 512 else row["Body"]
+
+    text_path = str((folder / f"{id_str}.txt").as_posix())
+    image_path_str = str(img_path.as_posix()) if img_path else None
+
+    with SessionLocal() as db:
+        # 1) article
+        upsert_article(
+            db,
+            id=id_str,
+            url=row["URL"],
+            title=row["Title"],
+            published_at=published_at,
+            paragraphs_count=row.get("ParagraphsCount", 0),
+        )
+
+        # 2) original text
+        create_or_get_text(
+            db,
+            article_id=id_str,
+            kind=TextKind.original_text,
+            path=text_path,
+            preview=preview,
+            tokens=None,
+        )
+
+        # 3) original image (if any)
+        if image_path_str and img_bytes:
+            create_or_get_asset(
+                db,
+                article_id=id_str,
+                kind=AssetKind.original_image,
+                path=image_path_str,
+                mime=None,  # you can pass Content-Type if you like
+                sha256=_sha256_bytes(img_bytes),
+                width=None,
+                height=None,
+            )
+
+        db.commit()
+    # --- end DB upsert ---
+
 
     return {
         "ID": id_str,

@@ -6,3 +6,5 @@ openpyxl
 python-multipart
 jinja2
 pillow
+sqlalchemy 
+alembic
