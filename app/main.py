@@ -212,35 +212,51 @@ def compare_page(request: Request):
     return templates.TemplateResponse("compare.html", {"request": request, "title": "Compare"})
 
 @app.get("/partials/compare_rows", response_class=HTMLResponse)
-def compare_rows(request: Request, limit: int = Query(12, ge=1, le=200)):
+def compare_rows(request: Request, limit: int = 12):
     posts = summarize_existing_results()[:limit]
-    # enrich with original text + placeholders for generated
     for a in posts:
         a["original_text"] = _read_body_text(a["id"])
+        # ⬇️ NEW: attach generated image (if any)
+        a["generated_image_web"] = _latest_generated_image_web(a["id"])
+        # leave generated_text None for now unless you add it later
         a["generated_text"] = None
-        a["generated_image_web"] = None
         a["gen_text_model"] = None
         a["gen_img_model"] = None
-        a["gen_status"] = "No generations yet."
+        a["gen_status"] = "No generations yet." if not a["generated_image_web"] else "Generated image available"
     return templates.TemplateResponse(
         "partials/compare_list.html",
         {"request": request, "posts": posts}
     )
 
-
 @app.post("/api/generate/t2i/first")
 def generate_first_t2i():
+    print("[API] /api/generate/t2i/first called", flush=True)
     posts = summarize_existing_results()
     if not posts:
+        print("[API] no articles", flush=True)
         raise HTTPException(status_code=404, detail="No articles available.")
 
-    first = posts[0]   # your “first post”
+    first = posts[0]
     article_id = first["id"]
     title = first.get("title") or ""
     body = _read_body_text(article_id)
-
     if not body:
+        print(f"[API] article {article_id} has empty body", flush=True)
         raise HTTPException(status_code=400, detail="First article has no body text.")
 
     result = generate_t2i_for_article(article_id, title, body)
+    print(f"[API] OK -> {result.get('image_path')}", flush=True)
     return {"ok": True, **result}
+
+
+def _latest_generated_image_web(article_id: str) -> str | None:
+    folder = Path(RESULTS_DIR) / article_id / "_gen" / "text_to_image"
+    if not folder.exists():
+        return None
+    exts = {".png", ".jpg", ".jpeg", ".webp"}
+    candidates = [f for f in folder.iterdir() if f.is_file() and f.suffix.lower() in exts]
+    if not candidates:
+        return None
+    latest = max(candidates, key=lambda p: p.stat().st_mtime)
+    # Served by StaticFiles at /static (already mounted to crawled_results)
+    return f"/static/{article_id}/_gen/text_to_image/{latest.name}"

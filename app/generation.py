@@ -11,26 +11,32 @@ from app.db.crud import create_or_get_asset
 from app.db.models import AssetKind
 
 DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
-# Singapore/international synchronous endpoint for Qwen-Image (recommended by docs)
+# Singapore/international synchronous endpoint for Qwen-Image
 T2I_SYNC_URL = "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
-MODEL_NAME = "qwen-image-plus"  # per docs, this and qwen-image are supported
+MODEL_NAME = "qwen-image-plus"  # or "qwen-image"
+
+def _log(msg: str) -> None:
+    print(msg, flush=True)
 
 def _build_prompt(title: str, body: str, max_chars: int = 750) -> str:
     """
     Build a concise visual prompt from article text.
-    Keep under the 800-char limit; include title + first 1-2 sentences.
+    Keep under the ~800-char limit; include title + first 1–2 sentences.
     """
     title = (title or "").strip()
     body = (body or "").strip().replace("\n", " ")
     piece = (body[: max_chars - len(title) - 20]).strip()
-    # A tiny style hint helps diffusion models
     return f"{title}. Photorealistic editorial illustration about: {piece}"
 
 def _download(url: str, dest: Path) -> bytes:
+    _log(f"[T2I] ⇣ downloading image…")
+    t0 = time.monotonic()
     r = requests.get(url, timeout=60)
     r.raise_for_status()
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(r.content)
+    dt_ms = int((time.monotonic() - t0) * 1000)
+    _log(f"[T2I] ✓ saved image: {dest} ({len(r.content)} bytes) in {dt_ms} ms")
     return r.content
 
 def generate_t2i_for_article(article_id: str, title: str, body: str,
@@ -42,18 +48,19 @@ def generate_t2i_for_article(article_id: str, title: str, body: str,
     Returns a short dict with paths/ids.
     """
     if not DASHSCOPE_API_KEY:
+        _log("[T2I] ❌ DASHSCOPE_API_KEY is not set")
         raise RuntimeError("DASHSCOPE_API_KEY is not set")
 
     prompt = _build_prompt(title, body)
+    _log(f"[T2I] ▶ start | article={article_id} | model={MODEL_NAME} | size={size}")
+    _log(f"[T2I] prompt ({len(prompt)} chars): {prompt[:200]}{'…' if len(prompt) > 200 else ''}")
+
     # Build request per Qwen-Image sync API
     payload = {
         "model": MODEL_NAME,
         "input": {
             "messages": [
-                {
-                    "role": "user",
-                    "content": [{"text": prompt}],
-                }
+                {"role": "user", "content": [{"text": prompt}]}
             ]
         },
         "parameters": {
@@ -66,16 +73,30 @@ def generate_t2i_for_article(article_id: str, title: str, body: str,
         "Authorization": f"Bearer {DASHSCOPE_API_KEY}",
         "Content-Type": "application/json",
     }
+
+    _log("[T2I] ⇢ sending request to Alibaba (DashScope)…")
+    t0 = time.monotonic()
     resp = requests.post(T2I_SYNC_URL, headers=headers, json=payload, timeout=120)
-    resp.raise_for_status()
+    dt_ms = int((time.monotonic() - t0) * 1000)
+    _log(f"[T2I] ⇠ response HTTP {resp.status_code} in {dt_ms} ms")
+
+    try:
+        resp.raise_for_status()
+    except requests.HTTPError:
+        snippet = (resp.text or "")[:500]
+        _log(f"[T2I] ❌ HTTP error body: {snippet}")
+        raise
+
     data = resp.json()
 
     # Per docs: image URL lives at output.choices[0].message.content[0].image
     # URL lives ~24h -> download immediately.
     try:
         image_url = data["output"]["choices"][0]["message"]["content"][0]["image"]
+        _log(f"[T2I] ✓ got image URL (temporary): {image_url[:120]}{'…' if len(image_url) > 120 else ''}")
     except Exception:
-        raise RuntimeError(f"Unexpected response: {json.dumps(data)[:500]}")
+        _log(f"[T2I] ❌ unexpected response shape: {json.dumps(data)[:600]}")
+        raise RuntimeError("Unexpected response: model output structure changed")
 
     # Persist to disk
     ts = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
@@ -84,6 +105,7 @@ def generate_t2i_for_article(article_id: str, title: str, body: str,
     img_bytes = _download(image_url, out_path)
 
     # Register in DB
+    _log(f"[T2I] ⇢ updating DB (assets.generated_image)…")
     with SessionLocal() as db:
         create_or_get_asset(
             db,
@@ -96,15 +118,13 @@ def generate_t2i_for_article(article_id: str, title: str, body: str,
             height=None,
         )
         db.commit()
+    _log(f"[T2I] ✓ DB updated for article={article_id}")
 
     # Save call metadata for reproducibility
     meta_path = out_dir / f"{MODEL_NAME}@{ts}.json"
-    meta_path.write_text(
-        json.dumps(
-            {"request": payload, "response": data, "image_path": str(out_path)},
-            ensure_ascii=False, indent=2,
-        ),
-        encoding="utf-8",
-    )
+    meta = {"request": payload, "response": data, "image_path": str(out_path)}
+    meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    _log(f"[T2I] ✓ metadata saved: {meta_path}")
 
+    _log(f"[T2I] ▶ done | article={article_id}")
     return {"article_id": article_id, "image_path": str(out_path), "prompt": prompt}

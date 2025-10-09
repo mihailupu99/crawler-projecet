@@ -3,19 +3,24 @@
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
   {% for p in posts %}
   <article class="bg-white rounded-2xl border shadow-sm overflow-hidden">
-    {% set img = p.local_image_web or p.image_url %} {% if img %}
-    <img
-      src="{{ img }}"
-      alt="{{ p.title }}"
-      class="aspect-[16/9] object-cover"
-    />
-    {% else %}
-    <div
-      class="aspect-[16/9] bg-gray-100 flex items-center justify-center text-gray-400"
-    >
-      no image
+    {% set gen = '/static/' ~ p.id ~ '/_gen/text_to_image' %}
+    <div class="relative">
+      {% set img = p.local_image_web or p.image_url %} {% if img %}
+      <img
+        src="{{ img }}"
+        alt="{{ p.title }}"
+        class="aspect-[16/9] object-cover"
+      />
+      {% else %}
+      <div
+        class="aspect-[16/9] bg-gray-100 flex items-center justify-center text-gray-400"
+      >
+        no image
+      </div>
+      {% endif %} {% if _latest_generated_image_web is defined %} {# optional:
+      if you expose a similar helper in Jinja; otherwise skip this badge #} {%
+      endif %}
     </div>
-    {% endif %}
 
     <div class="p-4 space-y-3">
       <h2 class="font-semibold text-base leading-snug line-clamp-2">
