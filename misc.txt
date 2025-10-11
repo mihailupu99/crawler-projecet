@@ -7,3 +7,8 @@ venv\Scripts\activate      # (on Windows PowerShell)
 
 # install dependencies
 pip install -r requirements.txt
+
+
+uvicorn app.main:app --reload
+
+https://newsmaker.md/ro/wp-json/wp/v2/posts

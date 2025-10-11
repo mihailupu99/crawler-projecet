@@ -22,7 +22,7 @@
     <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
       <!-- Original (left) -->
       <section class="space-y-3">
-        <div class="text-xs uppercase tracking-wide text-gray-500">
+        <div class="px-1 py-1 text-xs uppercase tracking-wide text-gray-500">
           Original
         </div>
         {% set img = a.local_image_web or a.image_url %} {% if img %}
@@ -54,7 +54,6 @@
           <div class="text-xs uppercase tracking-wide text-gray-500">
             Generated
           </div>
-          <!-- Will be wired later to enqueue -->
           <div class="flex gap-2">
             <button
               class="px-2 py-1 rounded-md border text-xs text-gray-400 cursor-not-allowed"
@@ -71,6 +70,14 @@
           </div>
         </div>
 
+        {% if a.generated_image_web %}
+        <img
+          src="{{ a.generated_image_web }}"
+          alt=""
+          class="w-full rounded-lg object-contain max-h-80"
+        />
+        <div class="text-xs text-gray-500">Model: {{ a.gen_img_model }}</div>
+
         {% if a.generated_text %}
         <pre
           class="text-sm whitespace-pre-wrap bg-gray-50 rounded-lg p-3 max-h-64 overflow-auto"
@@ -80,16 +87,20 @@
         <div class="text-xs text-gray-500">Model: {{ a.gen_text_model }}</div>
         {% else %}
         <div class="text-sm text-gray-500">No generated text yet.</div>
-        {% endif %} {% if a.generated_image_web %}
-        <img
-          src="{{ a.generated_image_web }}"
-          alt=""
-          class="w-full rounded-lg object-contain max-h-80"
-        />
-        <div class="text-xs text-gray-500">Model: {{ a.gen_img_model }}</div>
-        {% else %}
+        {% endif %} {% else %}
         <div class="text-sm text-gray-500">No generated image yet.</div>
-        {% endif %} {% if not a.generated_text and not a.generated_image_web %}
+
+        {% if a.generated_text %}
+        <pre
+          class="text-sm whitespace-pre-wrap bg-gray-50 rounded-lg p-3 max-h-64 overflow-auto"
+        >
+{{ a.generated_text }}</pre
+        >
+        <div class="text-xs text-gray-500">Model: {{ a.gen_text_model }}</div>
+        {% else %}
+        <div class="text-sm text-gray-500">No generated text yet.</div>
+        {% endif %} {% endif %} {% if not a.generated_text and not
+        a.generated_image_web %}
         <div class="text-xs text-gray-400">{{ a.gen_status }}</div>
         {% endif %}
       </section>

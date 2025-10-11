@@ -18,23 +18,7 @@
   </div>
 </div>
 
-{% if article.generated_text %}
-<div>
-  <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">
-    Generated Text
-  </div>
-  <pre
-    class="text-sm whitespace-pre-wrap bg-gray-50 rounded-lg p-3 max-h-56 overflow-auto"
-  >
-{{ article.generated_text }}</pre
-  >
-  <div class="text-xs text-gray-500 mt-1">
-    Model: {{ article.gen_text_model }} · Updated: {{ article.gen_text_time }}
-  </div>
-</div>
-{% else %}
-<div class="text-sm text-gray-500">No generated text yet.</div>
-{% endif %} {% if article.generated_image_web %}
+{% if article.generated_image_web %}
 <div class="mt-3">
   <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">
     Generated Image
@@ -47,10 +31,43 @@
   <div class="text-xs text-gray-500 mt-1">
     Model: {{ article.gen_img_model }}
   </div>
+
+  {% if article.generated_text %}
+  <div class="mt-4">
+    <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">
+      Generated Text
+    </div>
+    <pre
+      class="text-sm whitespace-pre-wrap bg-gray-50 rounded-lg p-3 max-h-56 overflow-auto"
+    >
+{{ article.generated_text }}</pre
+    >
+    <div class="text-xs text-gray-500 mt-1">
+      Model: {{ article.gen_text_model }} · Updated: {{ article.gen_text_time }}
+    </div>
+  </div>
+  {% else %}
+  <div class="text-sm text-gray-500 mt-3">No generated text yet.</div>
+  {% endif %}
 </div>
 {% else %}
 <div class="text-sm text-gray-500">No generated image yet.</div>
-{% endif %} {% if not article.generated_text and not article.generated_image_web
-%}
+
+{% if article.generated_text %}
+<div class="mt-3">
+  <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">
+    Generated Text
+  </div>
+  <pre
+    class="text-sm whitespace-pre-wrap bg-gray-50 rounded-lg p-3 max-h-56 overflow-auto"
+  >
+{{ article.generated_text }}</pre
+  >
+  <div class="text-xs text-gray-500 mt-1">
+    Model: {{ article.gen_text_model }} · Updated: {{ article.gen_text_time }}
+  </div>
+</div>
+{% endif %} {% endif %} {% if not article.generated_text and not
+article.generated_image_web %}
 <div class="text-xs text-gray-400">{{ article.gen_status }}</div>
 {% endif %}

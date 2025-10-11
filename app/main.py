@@ -13,13 +13,18 @@ from app.scraper import scrape_latest_wp_to_files, RESULTS_DIR
 from fastapi import Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
-from app.db.session import get_db
+from app.db.session import get_db, SessionLocal
 from app.db.models import Article, Asset, TextRow, AssetKind, TextKind
 
 from pathlib import Path
 
 from fastapi import HTTPException
 from app.generation import generate_t2i_for_article
+
+from typing import Optional
+
+from app.generation import generate_next_images_below
+
 
 
 
@@ -260,3 +265,93 @@ def _latest_generated_image_web(article_id: str) -> str | None:
     latest = max(candidates, key=lambda p: p.stat().st_mtime)
     # Served by StaticFiles at /static (already mounted to crawled_results)
     return f"/static/{article_id}/_gen/text_to_image/{latest.name}"
+
+
+from fastapi import Form, HTTPException
+from typing import Optional
+
+# ... keep your other imports (summarize_existing_results, _read_body_text, etc.)
+
+@app.post("/api/generate/t2i/batch")
+def generate_t2i_batch(
+    n: int = Form(5),
+    mode: str = Form("pending"),  # "pending" | "first"
+    force: Optional[str] = Form(None),  # checkbox -> "on" if checked
+):
+    """
+    Generate N images in one go.
+    mode="pending": uses DB to pick next N without images (get_pending_articles_for_t2i)
+    mode="first":   uses summarize_existing_results() order (like your current 'first')
+    """
+    force_bool = bool(force)  # "on" -> True, missing -> False
+    generated = []
+
+    if mode not in ("pending", "first"):
+        raise HTTPException(status_code=400, detail="Invalid mode")
+
+    if mode == "pending":
+        # Pick next N from DB that need images
+        from app.db.crud import get_pending_articles_for_t2i
+        with SessionLocal() as db:
+            items = get_pending_articles_for_t2i(db, limit=n)
+        if not items:
+            raise HTTPException(status_code=404, detail="No pending articles without images.")
+        for article_id, title, url in items:
+            body = _read_body_text(article_id) or ""
+            try:
+                res = generate_t2i_for_article(article_id, title or "", body, force=force_bool)
+                generated.append({"id": article_id, "path": res.get("image_path")})
+            except Exception as e:
+                # continue but record the error
+                generated.append({"id": article_id, "error": str(e)})
+
+    else:  # mode == "first"
+        posts = summarize_existing_results()
+        if not posts:
+            raise HTTPException(status_code=404, detail="No articles available.")
+        # Take the first N posts from your current list
+        for post in posts[: max(0, n)]:
+            article_id = post["id"]
+            title = post.get("title") or ""
+            body = _read_body_text(article_id) or ""
+            if not body:
+                generated.append({"id": article_id, "error": "empty body"})
+                continue
+            try:
+                res = generate_t2i_for_article(article_id, title, body, force=force_bool)
+                generated.append({"id": article_id, "path": res.get("image_path")})
+            except Exception as e:
+                generated.append({"id": article_id, "error": str(e)})
+
+    return {"ok": True, "count": len(generated), "generated": generated, "mode": mode, "force": force_bool}
+
+
+@app.post("/api/generate/t2i/below_top")
+def generate_t2i_below_top(
+    n: int = Form(5),
+    force: Optional[str] = Form(None),  # checkbox -> "on" if checked
+):
+    """
+    Uses the current top article (first in summarize_existing_results()) as the start ID,
+    then generates images for the next N IDs below it.
+    """
+    posts = summarize_existing_results()
+    if not posts:
+        raise HTTPException(status_code=404, detail="No articles available.")
+    start_id = posts[0]["id"]
+    ids = generate_next_images_below(start_id, count=max(0, n), force=bool(force))
+    return {"ok": True, "mode": "below_top", "start": start_id, "count": len(ids), "ids": ids, "force": bool(force)}
+
+@app.post("/api/generate/t2i/below")
+def generate_t2i_below(
+    start_id: str = Form(...),
+    n: int = Form(5),
+    force: Optional[str] = Form(None),
+):
+    """
+    Same as above but lets the user provide a specific start ID (e.g., 11LM099).
+    """
+    if not start_id:
+        raise HTTPException(status_code=400, detail="start_id is required")
+    ids = generate_next_images_below(start_id, count=max(0, n), force=bool(force))
+    return {"ok": True, "mode": "below", "start": start_id, "count": len(ids), "ids": ids, "force": bool(force)}
