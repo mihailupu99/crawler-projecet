@@ -86,6 +86,107 @@
   </button>
   <span class="htmx-indicator text-sm text-gray-500">Generating…</span>
 </form>
+<h3 class="text-lg font-semibold mt-8 mb-2">Generate article from image</h3>
+
+<div class="mb-3 flex items-center gap-2">
+  <button
+    class="px-3 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+    hx-post="/api/generate/v2t/first"
+    hx-on::after-request="htmx.ajax('GET','/partials/compare_rows?limit=12',{target:'#compare-list',swap:'innerHTML'})"
+  >
+    Generate article for first post
+  </button>
+  <span class="text-sm text-gray-500">Uses Qwen VL (image → article)</span>
+</div>
+
+<form
+  class="mb-3 flex flex-wrap items-center gap-3"
+  hx-post="/api/generate/v2t/below_top"
+  hx-swap="none"
+  hx-on::after-request="htmx.ajax('GET','/partials/compare_rows?limit=12',{target:'#compare-list',swap:'innerHTML'})"
+>
+  <label class="text-sm text-gray-700">
+    Next
+    <input
+      type="number"
+      name="n"
+      value="5"
+      min="1"
+      max="50"
+      class="mx-1 w-20 px-2 py-1 rounded border border-gray-300"
+    />
+    below top
+  </label>
+
+  <label class="text-sm text-gray-700">
+    Model
+    <select name="model" class="ml-1 px-2 py-1 rounded border border-gray-300">
+      <option value="qwen-vl-plus" selected>qwen-vl-plus</option>
+      <option value="qwen3-vl-plus">qwen3-vl-plus</option>
+    </select>
+  </label>
+
+  <label class="text-sm text-gray-700 flex items-center gap-1">
+    <input type="checkbox" name="force" />
+    Force re-generate
+  </label>
+
+  <button
+    class="px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+  >
+    Generate
+  </button>
+  <span class="htmx-indicator text-sm text-gray-500">Generating…</span>
+</form>
+
+<form
+  class="mb-6 flex flex-wrap items-center gap-3"
+  hx-post="/api/generate/v2t/below"
+  hx-swap="none"
+  hx-on::after-request="htmx.ajax('GET','/partials/compare_rows?limit=12',{target:'#compare-list',swap:'innerHTML'})"
+>
+  <label class="text-sm text-gray-700">
+    Start ID
+    <input
+      type="text"
+      name="start_id"
+      placeholder="e.g., 11LM099"
+      class="ml-1 w-36 px-2 py-1 rounded border border-gray-300"
+      required
+    />
+  </label>
+
+  <label class="text-sm text-gray-700">
+    Next
+    <input
+      type="number"
+      name="n"
+      value="5"
+      min="1"
+      max="50"
+      class="mx-1 w-20 px-2 py-1 rounded border border-gray-300"
+    />
+    posts
+  </label>
+
+  <label class="text-sm text-gray-700">
+    Model
+    <select name="model" class="ml-1 px-2 py-1 rounded border border-gray-300">
+      <option value="qwen-vl-plus" selected>qwen-vl-plus</option>
+      <option value="qwen3-vl-plus">qwen3-vl-plus</option>
+    </select>
+  </label>
+
+  <label class="text-sm text-gray-700 flex items-center gap-1">
+    <input type="checkbox" name="force" />
+    Force re-generate
+  </label>
+
+  <button class="px-3 py-2 rounded-lg bg-teal-600 text-white hover:bg-teal-700">
+    Generate from ID
+  </button>
+  <span class="htmx-indicator text-sm text-gray-500">Generating…</span>
+</form>
 
 <!-- Controls (optional) -->
 <div class="mb-4 flex gap-2 items-center">

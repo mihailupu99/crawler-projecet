@@ -1,6 +1,6 @@
 # app/main.py
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
@@ -12,7 +12,7 @@ from app.scraper import scrape_latest_wp_to_files, RESULTS_DIR
 
 from fastapi import Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func
+from sqlalchemy import select, func, desc
 from app.db.session import get_db, SessionLocal
 from app.db.models import Article, Asset, TextRow, AssetKind, TextKind
 
@@ -24,6 +24,8 @@ from app.generation import generate_t2i_for_article
 from typing import Optional
 
 from app.generation import generate_next_images_below
+from app.generation_text import generate_article_for_image, generate_next_articles_below
+
 
 
 
@@ -355,3 +357,49 @@ def generate_t2i_below(
         raise HTTPException(status_code=400, detail="start_id is required")
     ids = generate_next_images_below(start_id, count=max(0, n), force=bool(force))
     return {"ok": True, "mode": "below", "start": start_id, "count": len(ids), "ids": ids, "force": bool(force)}
+
+
+def _top_article_id() -> str:
+    # If your "top" is simply the latest created, prefer created_at desc; else id desc.
+    with SessionLocal() as db:
+        row = db.query(Article).order_by(desc(Article.created_at)).first()
+        if row:
+            return row.id
+        row2 = db.query(Article).order_by(desc(Article.id)).first()
+        return row2.id if row2 else ""
+
+@app.post("/api/generate/v2t/first", response_class=PlainTextResponse)
+def api_v2t_first(
+    model: str = Form("qwen-vl-plus"),
+    language: str = Form("en"),
+    force: bool = Form(False),
+):
+    start_id = _top_article_id()
+    if not start_id:
+        return PlainTextResponse("No articles", status_code=404)
+    res = generate_article_for_image(start_id, model=model, language=language, force=force)
+    return "OK" if res else "SKIP"
+
+@app.post("/api/generate/v2t/below_top", response_class=PlainTextResponse)
+def api_v2t_below_top(
+    n: int = Form(5),
+    model: str = Form("qwen-vl-plus"),
+    language: str = Form("en"),
+    force: bool = Form(False),
+):
+    start_id = _top_article_id()
+    if not start_id:
+        return PlainTextResponse("No articles", status_code=404)
+    generate_next_articles_below(start_id, n, model=model, language=language, force=force)
+    return "OK"
+
+@app.post("/api/generate/v2t/below", response_class=PlainTextResponse)
+def api_v2t_below(
+    start_id: str = Form(...),
+    n: int = Form(5),
+    model: str = Form("qwen-vl-plus"),
+    language: str = Form("en"),
+    force: bool = Form(False),
+):
+    generate_next_articles_below(start_id, n, model=model, language=language, force=force)
+    return "OK"
